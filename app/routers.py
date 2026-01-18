@@ -1,8 +1,12 @@
-from fastapi import APIRouter, Query, HTTPException
-from datetime import datetime
+from fastapi import APIRouter,HTTPException
 import os
 from app.db import db_client
 from app.utils import generate_signed_url
+from google.cloud import storage
+import json
+from cachetools import TTLCache
+
+storage_client = storage.Client()
 
 router = APIRouter()
 
@@ -23,3 +27,28 @@ async def get_fires(start_date, end_date):
         else:
             point["signed_url"] = None
     return db_results
+
+# Cache de 1 elemento con expiración de 300 segundos (5 minutos)
+firefighters_cache = TTLCache(maxsize=1, ttl=300)
+
+@router.get("/firefighters")
+async def get_firefighters():
+    if "data" in firefighters_cache:
+        return firefighters_cache["data"]
+
+    BUCKET_NAME = os.getenv("URUGUAY_DATA_BUCKET")
+    OBJECT_NAME = os.getenv("FIREFIGHTERS_FILE")
+
+    try:
+        bucket = storage_client.bucket(BUCKET_NAME)
+        blob = bucket.blob(OBJECT_NAME)
+
+        if not blob.exists():
+            raise HTTPException(status_code=404, detail="Archivo no encontrado en el bucket")
+        
+        geojson_data = json.loads(blob.download_as_text())
+        firefighters_cache["data"] = geojson_data  # Guardamos en cache
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"No se pudo leer el archivo: {str(e)}")
+
+    return geojson_data
