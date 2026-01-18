@@ -7,6 +7,10 @@ router = APIRouter()
 
 TABLE_NAME = os.getenv("MYSQL_FIRMS_TABLE", "firms")
 
+@router.get("/ping")
+def ping():
+    return {"status": "ok", "message": "FastAPI server is running"}
+
 
 @router.get("/uru_training_data")
 def get_uru_training_data():
