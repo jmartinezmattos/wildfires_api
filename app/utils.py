@@ -24,19 +24,6 @@ def generate_signed_url(gcs_path: str, expiration_minutes: int = 60) -> str | No
         method="GET",
     )
 
-
-def serialize_row(row: dict) -> dict:
-    result = {}
-    for k, v in row.items():
-        if isinstance(v, (datetime, date)):
-            result[k] = v.isoformat()
-        elif isinstance(v, timedelta):
-            result[k] = int(v.total_seconds())
-        else:
-            result[k] = v
-    return result
-
-
 def convert_to_geojson(
     rows,
     lat_field="latitude",

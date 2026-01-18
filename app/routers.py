@@ -2,42 +2,24 @@ from fastapi import APIRouter, Query, HTTPException
 from datetime import datetime
 import os
 from app.db import db_client
+from app.utils import generate_signed_url
 
 router = APIRouter()
 
-TABLE_NAME = os.getenv("MYSQL_FIRMS_TABLE", "firms")
+MYSQL_FIRMS_TABLE = os.getenv("MYSQL_FIRMS_TABLE")
 
 @router.get("/ping")
 def ping():
     return {"status": "ok", "message": "FastAPI server is running"}
 
+#http://localhost:8000/fires?start_date=2025-12-20&end_date=2025-12-31
 
-@router.get("/uru_training_data")
-def get_uru_training_data():
-    results = db_client.fetch_table_to_geojson("training_uruguay_fire")
-    return {
-        "count": len(results),
-        "data": results,
-    }
-
-
-@router.get("/firms")
-def get_firms(
-    start_date: datetime = Query(..., description="Fecha inicial ISO"),
-    end_date: datetime = Query(..., description="Fecha final ISO"),
-    fire: bool = Query(True, description="Filtrar solo 'Fire'"),
-):
-    try:
-        results = db_client.fetch_between_dates(
-            table=TABLE_NAME,
-            start_date=start_date,
-            end_date=end_date,
-            fire=fire,
-        )
-        return {
-            "count": len(results),
-            "data": results,
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+@router.get("/fires")
+async def get_fires(start_date, end_date):
+    db_results = await db_client.fetch_fires(start_date, end_date)
+    for point in db_results:
+        if point.get("gcs_image_path"):
+            point["signed_url"] = generate_signed_url(point["gcs_image_path"])
+        else:
+            point["signed_url"] = None
+    return db_results

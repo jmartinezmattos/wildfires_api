@@ -1,5 +1,5 @@
 fastapi
-mysql-connector-python
 python-dotenv
 google-cloud-storage
 uvicorn
+aiomysql
