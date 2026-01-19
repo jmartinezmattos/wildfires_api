@@ -1,8 +1,11 @@
 import os
 from datetime import date, datetime, timedelta
 from google.cloud import storage
+from fastapi import HTTPException
 
 SA_PATH = os.getenv("SA_PATH")
+
+storage_client = storage.Client()
 
 if SA_PATH:
     try:
@@ -62,3 +65,16 @@ def convert_to_geojson(
         "type": "FeatureCollection",
         "features": features,
     }
+
+def download_blob_as_text(BUCKET_NAME: str, OBJECT_NAME: str):
+
+    try:
+        bucket = storage_client.bucket(BUCKET_NAME)
+        blob = bucket.blob(OBJECT_NAME)
+
+        if not blob.exists():
+            raise HTTPException(status_code=404, detail="Archivo no encontrado en el bucket")
+        
+        return blob.download_as_text()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error downloading file {OBJECT_NAME} from bucket {BUCKET_NAME}: {str(e)}")
