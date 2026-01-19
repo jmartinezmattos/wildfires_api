@@ -37,3 +37,12 @@ us-central1 is the region
 wildfires is the Cloud SQL instance ID
 
 The proxy will start listening on the default local port (3306) and securely forward connections to the Cloud SQL instance.
+
+
+## Build and push the Docker image to Artifact Registry
+
+From the root folder of the repository (where the Dockerfile is located):
+
+```bash
+gcloud builds submit . --tag us-central1-docker.pkg.dev/wildfires-479718/wildfires/wildfires-api:v1
+```

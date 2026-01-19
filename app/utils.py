@@ -4,10 +4,13 @@ from google.cloud import storage
 
 SA_PATH = os.getenv("SA_PATH")
 
-if SA_PATH and SA_PATH.endswith(".json"):
-    client = storage.Client.from_service_account_json(SA_PATH)
+if SA_PATH:
+    try:
+        client = storage.Client.from_service_account_json(SA_PATH)
+    except Exception as e:
+        raise Exception(f"Failed to create storage client: {e}")
 else:
-    client = storage.Client()
+    raise EnvironmentError("Service Account path (SA_PATH) is not set in environment variables.")
 
 
 def generate_signed_url(gcs_path: str, expiration_minutes: int = 60) -> str | None:
