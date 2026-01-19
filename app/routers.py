@@ -31,6 +31,38 @@ async def get_fires(start_date, end_date):
 # Cache de 1 elemento con expiración de 300 segundos (5 minutos)
 firefighters_cache = TTLCache(maxsize=1, ttl=300)
 
+@router.get("/ndvi")
+async def get_ndvi_url():
+    NDVI_GCS_PATH = "gs://wildfires_data_um/ndvi/NDVI_Uruguay_20251206.tif"
+
+    signed_url = generate_signed_url(NDVI_GCS_PATH)
+
+    return {"ndvi_signed_url": signed_url}
+
+@router.get("/lst")
+async def get_lst_url():
+    LST_GCS_PATH = "gs://wildfires_data_um/lst/MODIS_LST_Uruguay_20251207.tif"
+
+    signed_url = generate_signed_url(LST_GCS_PATH)
+
+    return {"lst_signed_url": signed_url}
+
+@router.get("/fwi")
+async def get_fwi_url():
+    FWI_GCS_PATH = "gs://wildfires_data_um/fwi/FWI_Uruguay_20251201.tif"
+
+    signed_url = generate_signed_url(FWI_GCS_PATH)
+
+    return {"fwi_signed_url": signed_url}
+
+@router.get("/rgb")
+async def get_rgb_url():
+    RGB_GCS_PATH = "gs://wildfires_data_um/wildfire_rgb_aqua_-34.5338_-56.2831.tif"
+
+    signed_url = generate_signed_url(RGB_GCS_PATH)
+
+    return {"rgb_signed_url": signed_url}
+
 @router.get("/firefighters")
 async def get_firefighters():
     if "data" in firefighters_cache:
