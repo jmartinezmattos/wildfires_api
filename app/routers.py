@@ -39,6 +39,17 @@ async def get_ndvi_url():
 
     return {"ndvi_signed_url": signed_url}
 
+@router.get("/ndvi/last")
+async def get_last_ndvi():
+    metric_name = "NDVI"
+    db_result = await db_client.fetch_last_metric(metric_name)
+    print(db_result)
+    if db_result:
+        signed_url = generate_signed_url(db_result.get("gcs_path"))
+        return {"ndvi_signed_url": signed_url, "acq_datetime": db_result["acq_datetime"]}
+    else:
+        return {"message": "No NDVI data found"}
+
 @router.get("/lst")
 async def get_lst_url():
     LST_GCS_PATH = "gs://wildfires_data_um/lst/MODIS_LST_Uruguay_20251207.tif"
