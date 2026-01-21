@@ -6,6 +6,7 @@ from google.cloud import storage
 import json
 from cachetools import TTLCache
 from datetime import date
+from app.schemas import MetricName, MetricResponse
 
 storage_client = storage.Client()
 
@@ -32,14 +33,6 @@ async def get_fires(start_date, end_date):
 # Cache de 1 elemento con expiración de 300 segundos (5 minutos)
 firefighters_cache = TTLCache(maxsize=1, ttl=300)
 
-@router.get("/ndvi")
-async def get_ndvi_url():
-    NDVI_GCS_PATH = "gs://wildfires_data_um/ndvi/NDVI_Uruguay_20251206.tif"
-
-    signed_url = generate_signed_url(NDVI_GCS_PATH)
-
-    return {"ndvi_signed_url": signed_url}
-
 @router.get("/ndvi/last")
 async def get_last_ndvi():
     metric_name = "NDVI"
@@ -51,61 +44,28 @@ async def get_last_ndvi():
     else:
         return {"message": "No NDVI data found"}
     
-@router.get("/ndvi/last")
-async def get_last_ndvi():
-    metric_name = "NDVI"
-    db_result = await db_client.fetch_last_metric(metric_name)
-    print(db_result)
-    if db_result:
-        signed_url = generate_signed_url(db_result.get("gcs_path"))
-        return {"ndvi_signed_url": signed_url, "acq_datetime": db_result["acq_datetime"]}
-    else:
-        return {"message": "No NDVI data found"}
+@router.get("/metrics/{metric_name}/{acq_date}", response_model=MetricResponse)
+async def get_metric_by_date(metric_name: MetricName, acq_date: date):
 
-
-@router.get("/ndvi/{acq_date}")
-async def get_ndvi_by_date(acq_date: date):
-    metric_name = "NDVI"
+    metric_db_name = metric_name.value.upper()
 
     db_result = await db_client.fetch_metric_by_date(
-        metric_name=metric_name,
+        metric_name=metric_db_name,
         acq_date=acq_date
     )
 
     if not db_result:
-        raise HTTPException(status_code=404, detail="No NDVI data found for given date")
+        raise HTTPException(
+            status_code=404,
+            detail=f"No {metric_name.value} data found for given date"
+        )
 
     signed_url = generate_signed_url(db_result.get("gcs_path"))
 
     return {
-        "ndvi_signed_url": signed_url,
+        "url": signed_url,
         "acq_datetime": db_result["acq_datetime"]
     }
-
-
-@router.get("/lst")
-async def get_lst_url():
-    LST_GCS_PATH = "gs://wildfires_data_um/lst/MODIS_LST_Uruguay_20251207.tif"
-
-    signed_url = generate_signed_url(LST_GCS_PATH)
-
-    return {"lst_signed_url": signed_url}
-
-@router.get("/fwi")
-async def get_fwi_url():
-    FWI_GCS_PATH = "gs://wildfires_data_um/fwi/FWI_Uruguay_20251201.tif"
-
-    signed_url = generate_signed_url(FWI_GCS_PATH)
-
-    return {"fwi_signed_url": signed_url}
-
-@router.get("/rgb")
-async def get_rgb_url():
-    RGB_GCS_PATH = "gs://wildfires_data_um/wildfire_rgb_aqua_-34.5338_-56.2831.tif"
-
-    signed_url = generate_signed_url(RGB_GCS_PATH)
-
-    return {"rgb_signed_url": signed_url}
 
 @router.get("/firefighters")
 async def get_firefighters():
