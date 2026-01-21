@@ -34,7 +34,7 @@ async def get_fires(start_date, end_date):
 firefighters_cache = TTLCache(maxsize=1, ttl=300)
 
 @router.get("/metrics/{metric_name}/last", response_model=MetricResponse)
-async def get_last_ndvi(metric_name: MetricName):
+async def get_last_metric(metric_name: MetricName):
     
     metric_db_name = metric_name.value.upper()
 
