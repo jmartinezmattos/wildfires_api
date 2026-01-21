@@ -33,16 +33,20 @@ async def get_fires(start_date, end_date):
 # Cache de 1 elemento con expiración de 300 segundos (5 minutos)
 firefighters_cache = TTLCache(maxsize=1, ttl=300)
 
-@router.get("/ndvi/last")
-async def get_last_ndvi():
-    metric_name = "NDVI"
-    db_result = await db_client.fetch_last_metric(metric_name)
-    print(db_result)
+@router.get("/metrics/{metric_name}/last", response_model=MetricResponse)
+async def get_last_ndvi(metric_name: MetricName):
+    
+    metric_db_name = metric_name.value.upper()
+
+    db_result = await db_client.fetch_last_metric(metric_db_name)
+    
     if db_result:
         signed_url = generate_signed_url(db_result.get("gcs_path"))
-        return {"ndvi_signed_url": signed_url, "acq_datetime": db_result["acq_datetime"]}
+
+        return {"url": signed_url, 
+                "acq_datetime": db_result["acq_datetime"]}
     else:
-        return {"message": "No NDVI data found"}
+        return {"message": "No metric data found"}
     
 @router.get("/metrics/{metric_name}/{acq_date}", response_model=MetricResponse)
 async def get_metric_by_date(metric_name: MetricName, acq_date: date):
