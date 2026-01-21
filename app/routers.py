@@ -1,10 +1,11 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 import os
 from app.db import db_client
 from app.utils import generate_signed_url, download_blob_as_text
 from google.cloud import storage
 import json
 from cachetools import TTLCache
+from datetime import date
 
 storage_client = storage.Client()
 
@@ -49,6 +50,38 @@ async def get_last_ndvi():
         return {"ndvi_signed_url": signed_url, "acq_datetime": db_result["acq_datetime"]}
     else:
         return {"message": "No NDVI data found"}
+    
+@router.get("/ndvi/last")
+async def get_last_ndvi():
+    metric_name = "NDVI"
+    db_result = await db_client.fetch_last_metric(metric_name)
+    print(db_result)
+    if db_result:
+        signed_url = generate_signed_url(db_result.get("gcs_path"))
+        return {"ndvi_signed_url": signed_url, "acq_datetime": db_result["acq_datetime"]}
+    else:
+        return {"message": "No NDVI data found"}
+
+
+@router.get("/ndvi/{acq_date}")
+async def get_ndvi_by_date(acq_date: date):
+    metric_name = "NDVI"
+
+    db_result = await db_client.fetch_metric_by_date(
+        metric_name=metric_name,
+        acq_date=acq_date
+    )
+
+    if not db_result:
+        raise HTTPException(status_code=404, detail="No NDVI data found for given date")
+
+    signed_url = generate_signed_url(db_result.get("gcs_path"))
+
+    return {
+        "ndvi_signed_url": signed_url,
+        "acq_datetime": db_result["acq_datetime"]
+    }
+
 
 @router.get("/lst")
 async def get_lst_url():

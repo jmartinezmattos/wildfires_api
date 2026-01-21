@@ -91,6 +91,24 @@ class CloudSQLClient:
 
 
         return row
+    
+    async def fetch_metric_by_date(self, metric_name: str, acq_date):
+        async with self.pool.acquire() as conn:
+            async with conn.cursor(aiomysql.DictCursor) as cursor:
+                sql = f"""
+                    SELECT *
+                    FROM {MYSQL_METRICS_TABLE}
+                    WHERE metric = %s
+                    AND acq_datetime >= %s
+                    AND acq_datetime < DATE_ADD(%s, INTERVAL 1 DAY)
+                    ORDER BY acq_datetime DESC
+                    LIMIT 1
+                """
+                await cursor.execute(sql, (metric_name, acq_date, acq_date))
+                row = await cursor.fetchone()
+
+        return row
+
 
     
 
