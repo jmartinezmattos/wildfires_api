@@ -21,7 +21,7 @@ def ping():
 #http://localhost:8000/fires?start_date=2025-12-20&end_date=2025-12-31
 
 @router.get("/fires")
-async def get_fires(start_date, end_date):
+async def get_fires(start_date: date, end_date: date):
     db_results = await db_client.fetch_fires(start_date, end_date)
     for point in db_results:
         if point.get("gcs_image_path"):
