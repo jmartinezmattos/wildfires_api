@@ -1,10 +1,8 @@
 from fastapi import APIRouter, HTTPException
 import os
 from app.db import db_client
-from app.utils import generate_signed_url, download_blob_as_text
+from app.utils import get_cached_signed_url, get_cached_firefighters_geojson
 from google.cloud import storage
-import json
-from cachetools import TTLCache
 from datetime import date
 from app.schemas import MetricName, MetricResponse
 
@@ -13,10 +11,6 @@ storage_client = storage.Client()
 router = APIRouter()
 
 MYSQL_FIRMS_TABLE = os.getenv("MYSQL_FIRMS_TABLE")
-SIGNED_URL_CACHE_TTL_SECONDS = int(os.getenv("SIGNED_URL_CACHE_TTL_SECONDS", 300))
-
-firefighters_cache = TTLCache(maxsize=1, ttl=3600) # Cache for 1 hour
-signed_url_cache = TTLCache(maxsize=512, ttl=SIGNED_URL_CACHE_TTL_SECONDS)
 
 @router.get("/ping")
 def ping():
@@ -33,9 +27,6 @@ async def get_fires(start_date: date, end_date: date):
         else:
             point["signed_url"] = None
     return db_results
-
-# Cache de 1 elemento con expiración de 300 segundos (5 minutos)
-
 
 @router.get("/metrics/{metric_name}/last", response_model=MetricResponse)
 async def get_last_metric(metric_name: MetricName):
@@ -77,31 +68,8 @@ async def get_metric_by_date(metric_name: MetricName, acq_date: date):
 
 @router.get("/firefighters")
 async def get_firefighters():
-    if "data" in firefighters_cache:
-        return firefighters_cache["data"]
-
-    BUCKET_NAME = os.getenv("URUGUAY_DATA_BUCKET")
-    OBJECT_NAME = os.getenv("FIREFIGHTERS_FILE")
-
-    data = download_blob_as_text(BUCKET_NAME, OBJECT_NAME)
-
-    geojson_data = json.loads(data)
-    firefighters_cache["data"] = geojson_data  # Save to cache
-
-    return geojson_data
-
-
-def get_cached_signed_url(gcs_path: str) -> str | None:
-    if not gcs_path:
-        return None
-
-    if gcs_path in signed_url_cache:
-        print("Cache hit for signed URL")
-        return signed_url_cache[gcs_path]
     
-    print("Cache miss for signed URL")
+    data = get_cached_firefighters_geojson()
 
-    signed_url = generate_signed_url(gcs_path)
-    signed_url_cache[gcs_path] = signed_url
+    return data
 
-    return signed_url
