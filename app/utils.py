@@ -64,6 +64,7 @@ def generate_signed_url(gcs_path: str, expiration_minutes: int = 60) -> str | No
     return blob.generate_signed_url(
         expiration=timedelta(minutes=expiration_minutes),
         method="GET",
+        version="v4",
     )
 
 def convert_to_geojson(
