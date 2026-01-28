@@ -47,7 +47,7 @@ class CloudSQLClient:
         async with self.pool.acquire() as conn:
             async with conn.cursor(aiomysql.DictCursor) as cursor:
                 sql = f"""
-                    SELECT *
+                    SELECT id, latitude, longitude, acq_date, gcs_image_path
                     FROM {MYSQL_FIRMS_TABLE}
                     WHERE firms_datetime BETWEEN %s AND %s
                     AND prediction = 'Fire'

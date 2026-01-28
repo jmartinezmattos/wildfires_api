@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 import os
 from app.db import db_client
-from app.utils import get_cached_signed_url, get_cached_firefighters_geojson
+from app.utils import get_cached_signed_url, get_cached_firefighters_geojson, fires_to_geojson
 from google.cloud import storage
 from datetime import date
 from app.schemas import MetricName, MetricResponse
@@ -21,12 +21,8 @@ def ping():
 @router.get("/fires")
 async def get_fires(start_date: date, end_date: date):
     db_results = await db_client.fetch_fires(start_date, end_date)
-    for point in db_results:
-        if point.get("gcs_image_path"):
-            point["signed_url"] = get_cached_signed_url(point["gcs_image_path"])
-        else:
-            point["signed_url"] = None
-    return db_results
+    return fires_to_geojson(db_results)
+
 
 @router.get("/metrics/{metric_name}/last", response_model=MetricResponse)
 async def get_last_metric(metric_name: MetricName):

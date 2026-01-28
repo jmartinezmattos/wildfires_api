@@ -1,5 +1,7 @@
 import os
 from datetime import timedelta
+from typing import List, Dict, Any
+
 from google.cloud import storage
 from fastapi import HTTPException
 from cachetools import TTLCache
@@ -115,3 +117,53 @@ def download_blob_as_text(BUCKET_NAME: str, OBJECT_NAME: str):
         return blob.download_as_text()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error downloading file {OBJECT_NAME} from bucket {BUCKET_NAME}: {str(e)}")
+
+
+def fires_to_geojson(
+    fires: List[Dict[str, Any]]
+) -> Dict[str, Any]:
+    features = []
+
+    for fire in fires:
+        fire = add_signed_url_if_image(fire)
+        fire_feature = fire_to_feature(fire)
+        features.append(fire_feature)
+
+    return {
+        "type": "FeatureCollection",
+        "features": features,
+    }
+
+def add_signed_url_if_image(fire: dict) -> dict:
+    fire = fire.copy()
+
+    gcs_path = fire.get("gcs_image_path")
+    fire["signed_url"] = (
+        get_cached_signed_url(gcs_path) if gcs_path else None
+    )
+
+    return fire
+
+
+def fire_to_feature(fire: dict) -> dict:
+    lon = fire["longitude"]
+    lat = fire["latitude"]
+
+    properties = fire.copy()
+    properties.pop("longitude", None)
+    properties.pop("latitude", None)
+    properties.pop("gcs_image_path", None)  # internal only
+
+    return {
+        "type": "Feature",
+        "id": fire['id'],
+        "geometry": {
+            "type": "Point",
+            "coordinates": [lon, lat],
+        },
+        "properties": {
+            **properties,
+            "longitude": lon,
+            "latitude": lat,
+        },
+    }
