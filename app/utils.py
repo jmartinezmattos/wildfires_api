@@ -43,28 +43,26 @@ def get_cached_signed_url(gcs_path: str) -> str | None:
     if not gcs_path:
         return None
 
-    if gcs_path in signed_url_cache:
-        print("Cache hit for signed URL")
-        return signed_url_cache[gcs_path]
-    
-    print("Cache miss for signed URL")
+    signed_url = signed_url_cache.get(gcs_path)
+    if signed_url is not None:
+        return signed_url
 
-    signed_url = generate_signed_url(gcs_path, expiration_minutes=SIGNED_URL_CACHE_TTL_SECONDS // 60)
-    signed_url_cache[gcs_path] = signed_url
+    signed_url = generate_signed_url(gcs_path)
+    if signed_url is not None:
+        signed_url_cache[gcs_path] = signed_url
 
     return signed_url
 
-def generate_signed_url(gcs_path: str, expiration_minutes: int = 60) -> str | None:
+def generate_signed_url(gcs_path: str) -> str | None:
     if not gcs_path or not gcs_path.startswith("gs://"):
         return None
 
     bucket_name, blob_name = gcs_path[5:].split("/", 1)
 
-    bucket = client.bucket(bucket_name)
-    blob = bucket.blob(blob_name)
+    blob = client.bucket(bucket_name).blob(blob_name)
 
     return blob.generate_signed_url(
-        expiration=timedelta(minutes=expiration_minutes),
+        expiration=timedelta(seconds=SIGNED_URL_CACHE_TTL_SECONDS),
         method="GET",
         version="v4",
     )
@@ -119,15 +117,22 @@ def download_blob_as_text(BUCKET_NAME: str, OBJECT_NAME: str):
         raise HTTPException(status_code=500, detail=f"Error downloading file {OBJECT_NAME} from bucket {BUCKET_NAME}: {str(e)}")
 
 
-def fires_to_geojson(
-    fires: List[Dict[str, Any]]
-) -> Dict[str, Any]:
+def fires_to_geojson(fires: list[dict]) -> dict:
+    local_signed_url_cache = {}
     features = []
 
     for fire in fires:
-        fire = add_signed_url_if_image(fire)
-        fire_feature = fire_to_feature(fire)
-        features.append(fire_feature)
+        fire = fire.copy()
+
+        gcs_path = fire.get("gcs_image_path")
+        if gcs_path:
+            if gcs_path not in local_signed_url_cache:
+                local_signed_url_cache[gcs_path] = get_cached_signed_url(gcs_path)
+            fire["signed_url"] = local_signed_url_cache[gcs_path]
+        else:
+            fire["signed_url"] = None
+
+        features.append(fire_to_feature(fire))
 
     return {
         "type": "FeatureCollection",
@@ -146,24 +151,16 @@ def add_signed_url_if_image(fire: dict) -> dict:
 
 
 def fire_to_feature(fire: dict) -> dict:
-    lon = fire["longitude"]
-    lat = fire["latitude"]
-
-    properties = fire.copy()
-    properties.pop("longitude", None)
-    properties.pop("latitude", None)
-    properties.pop("gcs_image_path", None)  # internal only
-
     return {
         "type": "Feature",
-        "id": fire['id'],
+        "id": fire["id"],
         "geometry": {
             "type": "Point",
-            "coordinates": [lon, lat],
+            "coordinates": [fire["longitude"], fire["latitude"]],
         },
         "properties": {
-            **properties,
-            "longitude": lon,
-            "latitude": lat,
+            k: v
+            for k, v in fire.items()
+            if k not in "gcs_image_path"
         },
     }
