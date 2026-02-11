@@ -33,10 +33,17 @@ def get_cached_firefighters_geojson() -> dict:
     OBJECT_NAME = os.getenv("FIREFIGHTERS_FILE")
 
     data = download_blob_as_text(BUCKET_NAME, OBJECT_NAME)
-
     geojson_data = json.loads(data)
-    firefighters_cache["data"] = geojson_data  # Save to cache
 
+    for feature in geojson_data.get("features", []):
+        props = feature.get("properties", {})
+
+        feature["properties"] = {
+            "DEPARTAMENTO": props.get("DEPARTAMEN"),
+            "NOMBRE": props.get("NOMBRE"),
+        }
+
+    firefighters_cache["data"] = geojson_data  # Save to cache
     return geojson_data
 
 def get_cached_signed_url(gcs_path: str) -> str | None:
