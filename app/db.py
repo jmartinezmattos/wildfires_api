@@ -7,6 +7,7 @@ load_dotenv("config/.env")
 
 MYSQL_FIRMS_TABLE = os.getenv("MYSQL_FIRMS_TABLE")
 MYSQL_METRICS_TABLE = os.getenv("MYSQL_METRICS_TABLE")
+MYSQL_BATCH_TABLE = os.getenv("MYSQL_BATCH_TABLE")
 
 DB_CONFIG = {
     "user": os.getenv("MYSQL_USER"),
@@ -43,8 +44,38 @@ class CloudSQLClient:
                 autocommit=True,
             )
 
+    async def fetch_unchecked_fires(self, limit: int = 100):
+        async with self.pool.acquire() as conn:
+            async with conn.cursor(aiomysql.DictCursor) as cursor:
+
+                sql = f"""
+                    SELECT * FROM (
+                        SELECT id, gcs_image_path
+                        FROM {MYSQL_FIRMS_TABLE}
+                        WHERE revised is FALSE
+                        AND prediction = 'Fire'
+                        
+                        UNION ALL
+
+                        SELECT id, gcs_path AS gcs_image_path
+                        FROM {MYSQL_BATCH_TABLE}
+                        WHERE revised IS FALSE
+                    ) AS combined_results
+                    LIMIT {limit};
+                    """ 
+
+                await cursor.execute(sql)
+                rows = await cursor.fetchall()
+
+        return rows
+    
+# The order in the tuple MUST match the order of %s in the string
+#query = "SELECT * FROM fires WHERE latitude > %s AND acq_date = %s"
+#values = (34.05, "2023-10-01")
+#await cursor.execute(query, values)
+
+
     async def fetch_fires(self, start_date, end_date):
-        MYSQL_BATCH_TABLE = os.getenv("MYSQL_BATCH_TABLE")
         async with self.pool.acquire() as conn:
             async with conn.cursor(aiomysql.DictCursor) as cursor:
                 #sql = f"""

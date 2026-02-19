@@ -23,6 +23,10 @@ async def get_fires(start_date: date, end_date: date):
     db_results = await db_client.fetch_fires(start_date, end_date)
     return fires_to_geojson(db_results)
 
+@router.get("/fires_unchecked")
+async def get_fires_unchecked(limit: int = 100):
+    return await db_client.fetch_unchecked_fires(limit)
+
 
 @router.get("/metrics/{metric_name}/last", response_model=MetricResponse)
 async def get_last_metric(metric_name: MetricName):
