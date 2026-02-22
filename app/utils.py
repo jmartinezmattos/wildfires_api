@@ -146,6 +146,27 @@ def fires_to_geojson(fires: list[dict]) -> dict:
         "features": features,
     }
 
+def process_unchecked_fires(fires: list[dict]) -> dict:
+    local_signed_url_cache = {}
+    fires_result= []
+
+    for fire in fires:
+        fire = fire.copy()
+
+        gcs_path = fire.get("gcs_image_path")
+        if gcs_path:
+            if gcs_path not in local_signed_url_cache:
+                local_signed_url_cache[gcs_path] = get_cached_signed_url(gcs_path)
+            fire["signed_url"] = local_signed_url_cache[gcs_path]
+        else:
+            fire["signed_url"] = None
+
+        fires_result.append(fire)
+    
+    return fires_result
+    
+
+
 def add_signed_url_if_image(fire: dict) -> dict:
     fire = fire.copy()
 

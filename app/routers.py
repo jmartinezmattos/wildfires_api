@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 import os
 from app.db import db_client
-from app.utils import get_cached_signed_url, get_cached_firefighters_geojson, fires_to_geojson
+from app.utils import get_cached_signed_url, get_cached_firefighters_geojson, fires_to_geojson, process_unchecked_fires
 from google.cloud import storage
 from datetime import date
 from app.schemas import MetricName, MetricResponse
@@ -25,7 +25,8 @@ async def get_fires(start_date: date, end_date: date):
 
 @router.get("/fires_unchecked")
 async def get_fires_unchecked(limit: int = 100):
-    return await db_client.fetch_unchecked_fires(limit)
+    fires = await db_client.fetch_unchecked_fires(limit)
+    return process_unchecked_fires(fires)
 
 
 @router.get("/metrics/{metric_name}/last", response_model=MetricResponse)
