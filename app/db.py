@@ -94,14 +94,14 @@ class CloudSQLClient:
                 #"""
 
                 sql = f"""
-                    SELECT id, latitude, longitude, acq_date, gcs_image_path
+                    SELECT id, latitude, longitude, acq_date, gcs_image_path, fwi_category as fwi
                     FROM {MYSQL_FIRMS_TABLE}
                     WHERE firms_datetime BETWEEN %s AND %s
                     AND prediction = 'Fire'
                     
                     UNION ALL
 
-                    SELECT id, lat_center AS latitude, lon_center AS longitude, timestamp_utc AS acq_date, gcs_path AS gcs_image_path
+                    SELECT id, lat_center AS latitude, lon_center AS longitude, timestamp_utc AS acq_date, gcs_path AS gcs_image_path, fwi_category AS fwi
                     FROM {MYSQL_BATCH_TABLE}
                     WHERE timestamp_utc BETWEEN %s AND %s
                 """
