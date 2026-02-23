@@ -3,6 +3,8 @@ import aiomysql
 import os
 from dotenv import load_dotenv
 
+from app.schemas import FireRevision
+
 load_dotenv("config/.env")
 
 MYSQL_FIRMS_TABLE = os.getenv("MYSQL_FIRMS_TABLE")
@@ -73,6 +75,12 @@ class CloudSQLClient:
 #query = "SELECT * FROM fires WHERE latitude > %s AND acq_date = %s"
 #values = (34.05, "2023-10-01")
 #await cursor.execute(query, values)
+
+    
+    ### SEGUIR ESTA FUNCIÓN ###
+    async def process_revision(self, revisions: list[FireRevision]):
+        print("Saving fire revisions:", revisions)
+        return
 
 
     async def fetch_fires(self, start_date, end_date):

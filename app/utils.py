@@ -161,11 +161,11 @@ def process_unchecked_fires(fires: list[dict]) -> dict:
         else:
             fire["signed_url"] = None
 
+        fire.pop("gcs_image_path", None)
         fires_result.append(fire)
     
     return fires_result
     
-
 
 def add_signed_url_if_image(fire: dict) -> dict:
     fire = fire.copy()

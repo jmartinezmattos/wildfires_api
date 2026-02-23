@@ -4,7 +4,7 @@ from app.db import db_client
 from app.utils import get_cached_signed_url, get_cached_firefighters_geojson, fires_to_geojson, process_unchecked_fires
 from google.cloud import storage
 from datetime import date
-from app.schemas import MetricName, MetricResponse
+from app.schemas import MetricName, MetricResponse, FireRevision, FireRevisionList
 
 storage_client = storage.Client()
 
@@ -27,6 +27,12 @@ async def get_fires(start_date: date, end_date: date):
 async def get_fires_unchecked(limit: int = 100):
     fires = await db_client.fetch_unchecked_fires(limit)
     return process_unchecked_fires(fires)
+
+@router.post("/fires_unchecked")
+async def save_fire_revision(payload: FireRevisionList):
+    await db_client.process_revision(payload.revisions)
+    return {"message": "Fire revision saved successfully"}
+
 
 
 @router.get("/metrics/{metric_name}/last", response_model=MetricResponse)
