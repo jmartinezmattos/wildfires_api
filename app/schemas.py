@@ -29,6 +29,7 @@ class MetricResponse(BaseModel):
 class FireRevision(BaseModel):
     id: str
     is_fire: bool
+    source: str
 
 class FireRevisionList(BaseModel):
     revisions: list[FireRevision]

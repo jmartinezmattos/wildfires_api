@@ -138,7 +138,7 @@ def fires_to_geojson(fires: list[dict]) -> dict:
             fire["signed_url"] = local_signed_url_cache[gcs_path]
         else:
             fire["signed_url"] = None
-
+        fire.pop("gcs_image_path", None)
         features.append(fire_to_feature(fire))
 
     return {
@@ -162,7 +162,7 @@ def process_unchecked_fires(fires: list[dict]) -> dict:
             fire["signed_url"] = None
 
         fire.pop("gcs_image_path", None)
-        fires_result.append(fire)
+        fires_result.append(fire)   
     
     return fires_result
     

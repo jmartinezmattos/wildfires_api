@@ -52,14 +52,14 @@ class CloudSQLClient:
 
                 sql = f"""
                     SELECT * FROM (
-                        SELECT id, gcs_image_path
+                        SELECT id, gcs_image_path, 'firms' AS source
                         FROM {MYSQL_FIRMS_TABLE}
                         WHERE revised is FALSE
                         AND prediction = 'Fire'
                         
                         UNION ALL
 
-                        SELECT id, gcs_path AS gcs_image_path
+                        SELECT id, gcs_path AS gcs_image_path, 'batch' AS source
                         FROM {MYSQL_BATCH_TABLE}
                         WHERE revised IS FALSE
                     ) AS combined_results
@@ -71,16 +71,56 @@ class CloudSQLClient:
 
         return rows
     
-# The order in the tuple MUST match the order of %s in the string
-#query = "SELECT * FROM fires WHERE latitude > %s AND acq_date = %s"
-#values = (34.05, "2023-10-01")
-#await cursor.execute(query, values)
 
-    
-    ### SEGUIR ESTA FUNCIÓN ###
+    @staticmethod
+    def _is_fire_query(is_fire_query_string: str, table_name: str, ids: list):
+        # If no IDs were added for this table, return None to avoid a crash
+        if not ids:
+            return None
+            
+        # Crucial: Wrap the IDs in the WHERE clause with single quotes
+        # and ensure Boolean True/False is converted to 1/0 for MySQL
+        where_ids = ", ".join([f"'{id}'" for id in ids])
+        
+        final_query = f"""
+            UPDATE {table_name}
+            SET is_fire = CASE id
+                {is_fire_query_string}
+            END,
+            revised = TRUE
+            WHERE id IN ({where_ids});
+        """
+        return final_query
+
     async def process_revision(self, revisions: list[FireRevision]):
-        print("Saving fire revisions:", revisions)
-        return
+        firms_cases = []
+        batch_cases = []
+        firms_ids = []
+        batch_ids = []
+
+        for rev in revisions:
+            # We wrap the ID in quotes and convert Boolean to integer (1 or 0)
+            case_line = f"WHEN '{rev.id}' THEN {int(rev.is_fire)}"
+            
+            if rev.source == "firms":
+                firms_cases.append(case_line)
+                firms_ids.append(rev.id)
+            elif rev.source == "batch":
+                batch_cases.append(case_line)
+                batch_ids.append(rev.id)
+
+        # Join the lines into a single string
+        firms_query = self._is_fire_query("\n".join(firms_cases), MYSQL_FIRMS_TABLE, firms_ids)
+        batch_query = self._is_fire_query("\n".join(batch_cases), MYSQL_BATCH_TABLE, batch_ids)
+
+        async with self.pool.acquire() as conn:
+            async with conn.cursor() as cursor:
+                if firms_query:
+                    await cursor.execute(firms_query)
+                if batch_query:
+                    await cursor.execute(batch_query)
+            await conn.commit()
+
 
 
     async def fetch_fires(self, start_date, end_date):
