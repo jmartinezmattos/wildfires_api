@@ -1,5 +1,6 @@
 import os
-from datetime import timedelta
+from datetime import timedelta, datetime
+from zoneinfo import ZoneInfo
 from typing import List, Dict, Any
 
 from google.cloud import storage
@@ -131,6 +132,7 @@ def fires_to_geojson(fires: list[dict]) -> dict:
     for fire in fires:
         fire = fire.copy()
 
+        # Add signed URL if gcs_image_path exists
         gcs_path = fire.get("gcs_image_path")
         if gcs_path:
             if gcs_path not in local_signed_url_cache:
@@ -139,6 +141,13 @@ def fires_to_geojson(fires: list[dict]) -> dict:
         else:
             fire["signed_url"] = None
         fire.pop("gcs_image_path", None)
+
+        # Convert to Uruguay time
+        img_datetime = fire.get("timestamp")
+        utc_dt = datetime.strptime(img_datetime, "%Y-%m-%d %H:%M:%S").replace(tzinfo=ZoneInfo("UTC"))
+        uy_dt = utc_dt.astimezone(ZoneInfo("America/Montevideo"))
+        fire["timestamp"] = uy_dt.strftime("%Y-%m-%d %H:%M:%S")
+
         features.append(fire_to_feature(fire))
 
     return {

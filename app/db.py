@@ -52,14 +52,14 @@ class CloudSQLClient:
 
                 sql = f"""
                     SELECT * FROM (
-                        SELECT id, gcs_image_path, 'firms' AS source
+                        SELECT id, gcs_image_path, 'firms' AS source, firms_datetime AS timestamp
                         FROM {MYSQL_FIRMS_TABLE}
                         WHERE revised is FALSE
                         AND prediction = 'Fire'
                         
                         UNION ALL
 
-                        SELECT id, gcs_path AS gcs_image_path, 'batch' AS source
+                        SELECT id, gcs_path AS gcs_image_path, 'batch' AS source, timestamp_utc AS timestamp
                         FROM {MYSQL_BATCH_TABLE}
                         WHERE revised IS FALSE
                     ) AS combined_results
