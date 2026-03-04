@@ -5,7 +5,8 @@ from app.utils import get_cached_signed_url, get_cached_firefighters_geojson, fi
 from google.cloud import storage
 from datetime import date
 from app.schemas import MetricName, MetricResponse, FireRevision, FireRevisionList
-
+from typing import Literal
+from fastapi import Request
 storage_client = storage.Client()
 
 router = APIRouter()
@@ -24,8 +25,25 @@ async def get_fires(start_date: date, end_date: date):
     return fires_to_geojson(db_results)
 
 @router.get("/fires_unchecked")
-async def get_fires_unchecked(limit: int = 100):
-    fires = await db_client.fetch_unchecked_fires(limit)
+async def get_fires_unchecked(
+    limit: int = 100,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    source: Literal["FIRMS", "BATCH"] | None = None,
+):
+    if start_date and end_date and start_date > end_date:
+        raise HTTPException(
+            status_code=422,
+            detail="start_date must be less than or equal to end_date",
+        )
+
+    fires = await db_client.fetch_unchecked_fires(
+        limit=limit,
+        start_date=start_date,
+        end_date=end_date,
+        source=source,
+    )
+    print(f"NUMBER OF FIRES IS {len(fires)}")
     return process_unchecked_fires(fires)
 
 @router.post("/fires_unchecked")

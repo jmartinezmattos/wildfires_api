@@ -2,6 +2,7 @@ import os
 import aiomysql
 import os
 from dotenv import load_dotenv
+from datetime import date
 
 from app.schemas import FireRevision
 
@@ -46,31 +47,59 @@ class CloudSQLClient:
                 autocommit=True,
             )
 
-    async def fetch_unchecked_fires(self, limit: int = 100):
+    async def fetch_unchecked_fires(
+    self,
+    limit: int = 10,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    source: str | None = None,
+):  
+        print(f"LIMIT: {limit}, START_DATE: {start_date}, END_DATE: {end_date}, SOURCE: {source}")
+        normalized_source = source.lower() if source else None
+        
+        # 1. Define the sub-queries
+        firms_query = f"""
+            SELECT id, gcs_image_path, 'firms' AS source, firms_datetime AS timestamp
+            FROM {MYSQL_FIRMS_TABLE}
+            WHERE revised IS FALSE AND prediction = 'Fire'
+        """
+        
+        batch_query = f"""
+            SELECT id, gcs_path AS gcs_image_path, 'batch' AS source, timestamp_utc AS timestamp
+            FROM {MYSQL_BATCH_TABLE}
+            WHERE revised IS FALSE
+        """
+
+        # 2. Decide which parts to include based on 'source'
+        if normalized_source == 'firms':
+            base_sql = firms_query
+        elif normalized_source == 'batch':
+            base_sql = batch_query
+        else:
+            # If None or something else, combine both
+            base_sql = f"({firms_query}) UNION ALL ({batch_query})"
+
+        # 3. Wrap and add the shared filters
+        final_sql = f"""
+            SELECT * FROM ({base_sql}) AS combined
+            WHERE (%s IS NULL OR DATE(timestamp) >= %s)
+            AND (%s IS NULL OR DATE(timestamp) <= %s)
+            ORDER BY timestamp DESC
+            LIMIT %s;
+        """
+
         async with self.pool.acquire() as conn:
             async with conn.cursor(aiomysql.DictCursor) as cursor:
-
-                sql = f"""
-                    SELECT * FROM (
-                        SELECT id, gcs_image_path, 'firms' AS source, firms_datetime AS timestamp
-                        FROM {MYSQL_FIRMS_TABLE}
-                        WHERE revised is FALSE
-                        AND prediction = 'Fire'
-                        
-                        UNION ALL
-
-                        SELECT id, gcs_path AS gcs_image_path, 'batch' AS source, timestamp_utc AS timestamp
-                        FROM {MYSQL_BATCH_TABLE}
-                        WHERE revised IS FALSE
-                    ) AS combined_results
-                    LIMIT {limit};
-                    """ 
-
-                await cursor.execute(sql)
-                rows = await cursor.fetchall()
-
-        return rows
-    
+                await cursor.execute(
+                    final_sql,
+                    (start_date, 
+                     start_date, 
+                     end_date,
+                     end_date, 
+                     limit),
+                )
+                return await cursor.fetchall()
+        
 
     @staticmethod
     def _is_fire_query(is_fire_query_string: str, table_name: str, ids: list):
