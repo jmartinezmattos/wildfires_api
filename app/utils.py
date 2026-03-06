@@ -141,13 +141,6 @@ def fires_to_geojson(fires: list[dict]) -> dict:
         else:
             fire["signed_url"] = None
         fire.pop("gcs_image_path", None)
-
-        # Convert to Uruguay time
-        img_datetime = fire.get("timestamp")
-        utc_dt = datetime.strptime(img_datetime, "%Y-%m-%d %H:%M:%S").replace(tzinfo=ZoneInfo("UTC"))
-        uy_dt = utc_dt.astimezone(ZoneInfo("America/Montevideo"))
-        fire["timestamp"] = uy_dt.strftime("%Y-%m-%d %H:%M:%S")
-
         features.append(fire_to_feature(fire))
 
     return {
