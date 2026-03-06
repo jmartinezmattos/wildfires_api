@@ -43,7 +43,6 @@ async def get_fires_unchecked(
         end_date=end_date,
         source=source,
     )
-    print(f"NUMBER OF FIRES IS {len(fires)}")
     return process_unchecked_fires(fires)
 
 @router.post("/fires_unchecked")
