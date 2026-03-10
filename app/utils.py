@@ -148,6 +148,18 @@ def fires_to_geojson(fires: list[dict]) -> dict:
         "features": features,
     }
 
+def alerts_to_geojson(fires: list[dict]) -> dict:
+    features = []
+
+    for fire in fires:
+        fire = fire.copy()
+        features.append(fire_to_feature(fire))
+
+    return {
+        "type": "FeatureCollection",
+        "features": features,
+    }
+
 def process_unchecked_fires(fires: list[dict]) -> dict:
     local_signed_url_cache = {}
     fires_result= []

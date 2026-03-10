@@ -180,6 +180,20 @@ class CloudSQLClient:
 
         return rows
     
+    async def fetch_firms_alerts(self, start_date, end_date):
+        async with self.pool.acquire() as conn:
+            async with conn.cursor(aiomysql.DictCursor) as cursor:
+
+                sql = f"""
+                    SELECT id, latitude, longitude, acq_date
+                    FROM {MYSQL_FIRMS_TABLE}
+                    WHERE firms_datetime BETWEEN %s AND %s
+                """
+                await cursor.execute(sql, (start_date, end_date))
+                rows = await cursor.fetchall()
+
+        return rows
+    
     async def fetch_metric(self, date, metric_name):
         async with self.pool.acquire() as conn:
             async with conn.cursor(aiomysql.DictCursor) as cursor:
@@ -207,11 +221,8 @@ class CloudSQLClient:
                     ORDER BY acq_datetime DESC
                     LIMIT 1
                 """
-                print(sql)
                 await cursor.execute(sql, (metric_name))
                 row = await cursor.fetchone()
-                print(row)
-
 
         return row
     
