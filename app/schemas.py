@@ -13,6 +13,7 @@ class MetricName(str, Enum):
     Internally they are mapped to uppercase values used in the DB.
     """
     ndvi = "ndvi"
+    nbr = "nbr"
     fwi = "fwi"
     lst = "lst"
     rgb = "rgb"
