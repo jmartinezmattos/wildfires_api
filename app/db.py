@@ -2,11 +2,15 @@ import os
 import aiomysql
 import os
 from dotenv import load_dotenv
+from datetime import date
+
+from app.schemas import FireRevision
 
 load_dotenv("config/.env")
 
 MYSQL_FIRMS_TABLE = os.getenv("MYSQL_FIRMS_TABLE")
 MYSQL_METRICS_TABLE = os.getenv("MYSQL_METRICS_TABLE")
+MYSQL_BATCH_TABLE = os.getenv("MYSQL_BATCH_TABLE")
 
 DB_CONFIG = {
     "user": os.getenv("MYSQL_USER"),
@@ -43,14 +47,147 @@ class CloudSQLClient:
                 autocommit=True,
             )
 
+    async def fetch_unchecked_fires(
+    self,
+    limit: int = 10,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    source: str | None = None,
+):  
+        print(f"LIMIT: {limit}, START_DATE: {start_date}, END_DATE: {end_date}, SOURCE: {source}")
+        normalized_source = source.lower() if source else None
+        
+        # 1. Define the sub-queries
+        firms_query = f"""
+            SELECT id, gcs_image_path, 'firms' AS source, firms_datetime AS timestamp
+            FROM {MYSQL_FIRMS_TABLE}
+            WHERE revised IS FALSE AND prediction = 'Fire'
+        """
+        
+        batch_query = f"""
+            SELECT id, gcs_path AS gcs_image_path, 'batch' AS source, timestamp_utc AS timestamp
+            FROM {MYSQL_BATCH_TABLE}
+            WHERE revised IS FALSE
+        """
+
+        # 2. Decide which parts to include based on 'source'
+        if normalized_source == 'firms':
+            base_sql = firms_query
+        elif normalized_source == 'batch':
+            base_sql = batch_query
+        else:
+            # If None or something else, combine both
+            base_sql = f"({firms_query}) UNION ALL ({batch_query})"
+
+        # 3. Wrap and add the shared filters
+        final_sql = f"""
+            SELECT * FROM ({base_sql}) AS combined
+            WHERE (%s IS NULL OR DATE(timestamp) >= %s)
+            AND (%s IS NULL OR DATE(timestamp) <= %s)
+            ORDER BY timestamp DESC
+            LIMIT %s;
+        """
+
+        async with self.pool.acquire() as conn:
+            async with conn.cursor(aiomysql.DictCursor) as cursor:
+                await cursor.execute(
+                    final_sql,
+                    (start_date, 
+                     start_date, 
+                     end_date,
+                     end_date, 
+                     limit),
+                )
+                return await cursor.fetchall()
+        
+
+    @staticmethod
+    def _is_fire_query(is_fire_query_string: str, table_name: str, ids: list):
+        # If no IDs were added for this table, return None to avoid a crash
+        if not ids:
+            return None
+            
+        # Crucial: Wrap the IDs in the WHERE clause with single quotes
+        # and ensure Boolean True/False is converted to 1/0 for MySQL
+        where_ids = ", ".join([f"'{id}'" for id in ids])
+        
+        final_query = f"""
+            UPDATE {table_name}
+            SET is_fire = CASE id
+                {is_fire_query_string}
+            END,
+            revised = TRUE
+            WHERE id IN ({where_ids});
+        """
+        return final_query
+
+    async def process_revision(self, revisions: list[FireRevision]):
+        firms_cases = []
+        batch_cases = []
+        firms_ids = []
+        batch_ids = []
+
+        for rev in revisions:
+            # We wrap the ID in quotes and convert Boolean to integer (1 or 0)
+            case_line = f"WHEN '{rev.id}' THEN {int(rev.is_fire)}"
+            
+            if rev.source == "firms":
+                firms_cases.append(case_line)
+                firms_ids.append(rev.id)
+            elif rev.source == "batch":
+                batch_cases.append(case_line)
+                batch_ids.append(rev.id)
+
+        # Join the lines into a single string
+        firms_query = self._is_fire_query("\n".join(firms_cases), MYSQL_FIRMS_TABLE, firms_ids)
+        batch_query = self._is_fire_query("\n".join(batch_cases), MYSQL_BATCH_TABLE, batch_ids)
+
+        async with self.pool.acquire() as conn:
+            async with conn.cursor() as cursor:
+                if firms_query:
+                    await cursor.execute(firms_query)
+                if batch_query:
+                    await cursor.execute(batch_query)
+            await conn.commit()
+
+
+
     async def fetch_fires(self, start_date, end_date):
         async with self.pool.acquire() as conn:
             async with conn.cursor(aiomysql.DictCursor) as cursor:
+                #sql = f"""
+                #    SELECT id, latitude, longitude, acq_date, gcs_image_path
+                #    FROM {MYSQL_FIRMS_TABLE}
+                #    WHERE firms_datetime BETWEEN %s AND %s
+                #    AND prediction = 'Fire'
+                #"""
+
                 sql = f"""
-                    SELECT *
+                    SELECT id, latitude, longitude, acq_date, gcs_image_path, fwi_category as fwi
                     FROM {MYSQL_FIRMS_TABLE}
                     WHERE firms_datetime BETWEEN %s AND %s
                     AND prediction = 'Fire'
+                    
+                    UNION ALL
+
+                    SELECT id, lat_center AS latitude, lon_center AS longitude, timestamp_utc AS acq_date, gcs_path AS gcs_image_path, fwi_category AS fwi
+                    FROM {MYSQL_BATCH_TABLE}
+                    WHERE timestamp_utc BETWEEN %s AND %s
+                """
+
+                await cursor.execute(sql, (start_date, end_date, start_date, end_date))
+                rows = await cursor.fetchall()
+
+        return rows
+    
+    async def fetch_firms_alerts(self, start_date, end_date):
+        async with self.pool.acquire() as conn:
+            async with conn.cursor(aiomysql.DictCursor) as cursor:
+
+                sql = f"""
+                    SELECT id, latitude, longitude, acq_date
+                    FROM {MYSQL_FIRMS_TABLE}
+                    WHERE firms_datetime BETWEEN %s AND %s
                 """
                 await cursor.execute(sql, (start_date, end_date))
                 rows = await cursor.fetchall()
@@ -84,11 +221,8 @@ class CloudSQLClient:
                     ORDER BY acq_datetime DESC
                     LIMIT 1
                 """
-                print(sql)
                 await cursor.execute(sql, (metric_name))
                 row = await cursor.fetchone()
-                print(row)
-
 
         return row
     

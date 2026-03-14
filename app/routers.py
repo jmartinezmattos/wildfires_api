@@ -1,11 +1,12 @@
 from fastapi import APIRouter, HTTPException
 import os
 from app.db import db_client
-from app.utils import get_cached_signed_url, get_cached_firefighters_geojson
+from app.utils import get_cached_signed_url, get_cached_firefighters_geojson, fires_to_geojson, process_unchecked_fires, alerts_to_geojson
 from google.cloud import storage
 from datetime import date
-from app.schemas import MetricName, MetricResponse
-
+from app.schemas import MetricName, MetricResponse, FireRevision, FireRevisionList
+from typing import Literal
+from fastapi import Request
 storage_client = storage.Client()
 
 router = APIRouter()
@@ -21,12 +22,40 @@ def ping():
 @router.get("/fires")
 async def get_fires(start_date: date, end_date: date):
     db_results = await db_client.fetch_fires(start_date, end_date)
-    for point in db_results:
-        if point.get("gcs_image_path"):
-            point["signed_url"] = get_cached_signed_url(point["gcs_image_path"])
-        else:
-            point["signed_url"] = None
-    return db_results
+    return fires_to_geojson(db_results)
+
+@router.get("/firms_alerts")
+async def get_fires(start_date: date, end_date: date):
+    db_results = await db_client.fetch_firms_alerts(start_date, end_date)
+    return alerts_to_geojson(db_results)
+
+@router.get("/fires_unchecked")
+async def get_fires_unchecked(
+    limit: int = 100,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    source: Literal["FIRMS", "BATCH"] | None = None,
+):
+    if start_date and end_date and start_date > end_date:
+        raise HTTPException(
+            status_code=422,
+            detail="start_date must be less than or equal to end_date",
+        )
+
+    fires = await db_client.fetch_unchecked_fires(
+        limit=limit,
+        start_date=start_date,
+        end_date=end_date,
+        source=source,
+    )
+    return process_unchecked_fires(fires)
+
+@router.post("/fires_unchecked")
+async def save_fire_revision(payload: FireRevisionList):
+    await db_client.process_revision(payload.revisions)
+    return {"message": "Fire revision saved successfully"}
+
+
 
 @router.get("/metrics/{metric_name}/last", response_model=MetricResponse)
 async def get_last_metric(metric_name: MetricName):
@@ -72,4 +101,3 @@ async def get_firefighters():
     data = get_cached_firefighters_geojson()
 
     return data
-

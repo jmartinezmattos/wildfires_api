@@ -26,3 +26,11 @@ class MetricName(str, Enum):
 class MetricResponse(BaseModel):
     url: str
     acq_datetime: datetime
+
+class FireRevision(BaseModel):
+    id: str
+    is_fire: bool
+    source: str
+
+class FireRevisionList(BaseModel):
+    revisions: list[FireRevision]
