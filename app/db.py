@@ -67,7 +67,7 @@ class CloudSQLClient:
         batch_query = f"""
             SELECT id, gcs_path AS gcs_image_path, 'batch' AS source, timestamp_utc AS timestamp
             FROM {MYSQL_BATCH_TABLE}
-            WHERE revised IS FALSE
+            WHERE revised IS FALSE AND (prediction_rgb = 'Fire' OR prediction_multiband = 'Fire')
         """
 
         # 2. Decide which parts to include based on 'source'
