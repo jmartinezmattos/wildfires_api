@@ -152,30 +152,68 @@ class CloudSQLClient:
 
 
 
-    async def fetch_fires(self, start_date, end_date):
+
+    @staticmethod
+    def _build_firms_subquery(start_date, end_date, confirmed_only=False,):
+    
+        sql = f"""
+            SELECT id, latitude, longitude, acq_date, gcs_image_path, fwi_category as fwi, 'FIRMS' AS source, revised
+            FROM {MYSQL_FIRMS_TABLE}
+            WHERE firms_datetime BETWEEN %s AND %s
+            AND prediction = 'Fire'
+
+
+        """
+        params = [start_date, end_date]
+
+        if confirmed_only:
+            sql += " AND revised = TRUE AND is_fire = TRUE"
+
+        return sql, params
+    
+
+    @staticmethod
+    def _build_batch_subquery(start_date, end_date, confirmed_only=False,):
+    # Currently consider fire those classified as such by both RGB and multiband models.
+        sql = f"""
+            SELECT id, lat_center AS latitude, lon_center AS longitude, timestamp_utc AS acq_date, gcs_path_rgb AS gcs_image_path, fwi_category AS fwi, 'BATCH' AS source, revised
+            FROM {MYSQL_BATCH_TABLE}
+            WHERE timestamp_utc BETWEEN %s AND %s
+            AND prediction_rgb = 'Fire'
+            And prediction_multiband = 'Fire' 
+
+        """
+        params = [start_date, end_date]
+
+        if confirmed_only:
+            sql += " AND revised = TRUE AND is_fire = TRUE"
+
+        return sql, params
+
+
+    async def fetch_fires(self, start_date, end_date, source=None, confirmed_only=False):
+        queries = []
+        params = []
+
+        if source in ("ALL", "FIRMS"):
+            q, p = self._build_firms_subquery(start_date, end_date, confirmed_only)
+            queries.append(q)
+            params.extend(p)
+
+        if source in ("ALL", "BATCH"):
+            q, p = self._build_batch_subquery(start_date, end_date, confirmed_only)
+            queries.append(q)
+            params.extend(p)
+
+        sql = " UNION ALL ".join(queries)
+
+        print(f"SQL is {sql}")
+        print(f"Params are {params}")
+
+
         async with self.pool.acquire() as conn:
             async with conn.cursor(aiomysql.DictCursor) as cursor:
-                #sql = f"""
-                #    SELECT id, latitude, longitude, acq_date, gcs_image_path
-                #    FROM {MYSQL_FIRMS_TABLE}
-                #    WHERE firms_datetime BETWEEN %s AND %s
-                #    AND prediction = 'Fire'
-                #"""
-
-                sql = f"""
-                    SELECT id, latitude, longitude, acq_date, gcs_image_path, fwi_category as fwi
-                    FROM {MYSQL_FIRMS_TABLE}
-                    WHERE firms_datetime BETWEEN %s AND %s
-                    AND prediction = 'Fire'
-                    
-                    UNION ALL
-
-                    SELECT id, lat_center AS latitude, lon_center AS longitude, timestamp_utc AS acq_date, gcs_path AS gcs_image_path, fwi_category AS fwi
-                    FROM {MYSQL_BATCH_TABLE}
-                    WHERE timestamp_utc BETWEEN %s AND %s
-                """
-
-                await cursor.execute(sql, (start_date, end_date, start_date, end_date))
+                await cursor.execute(sql, params)
                 rows = await cursor.fetchall()
 
         return rows

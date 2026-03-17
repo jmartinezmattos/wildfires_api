@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException
 import os
+import json
 from app.db import db_client
 from app.utils import get_cached_signed_url, get_cached_firefighters_geojson, fires_to_geojson, process_unchecked_fires, alerts_to_geojson
 from google.cloud import storage
@@ -20,8 +21,8 @@ def ping():
 #http://localhost:8000/fires?start_date=2025-12-20&end_date=2025-12-31
 
 @router.get("/fires")
-async def get_fires(start_date: date, end_date: date):
-    db_results = await db_client.fetch_fires(start_date, end_date)
+async def get_fires(start_date: date, end_date: date, source: Literal["FIRMS", "BATCH", "ALL"] | None = None, confirmed_only: bool = False):
+    db_results = await db_client.fetch_fires(start_date, end_date, source, confirmed_only)
     return fires_to_geojson(db_results)
 
 @router.get("/firms_alerts")
