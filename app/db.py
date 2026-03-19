@@ -59,15 +59,37 @@ class CloudSQLClient:
         
         # 1. Define the sub-queries
         firms_query = f"""
-            SELECT id, gcs_image_path, 'firms' AS source, firms_datetime AS timestamp
+            SELECT
+                id,
+                gcs_image_path,
+                'firms' AS source,
+                firms_datetime AS timestamp
             FROM {MYSQL_FIRMS_TABLE}
             WHERE revised IS FALSE AND prediction = 'Fire'
         """
         
         batch_query = f"""
-            SELECT id, gcs_path AS gcs_image_path, 'batch' AS source, timestamp_utc AS timestamp
+            SELECT
+                id,
+                gcs_path_rgb AS gcs_image_path,
+                'batch' AS source,
+                timestamp_utc AS timestamp
             FROM {MYSQL_BATCH_TABLE}
             WHERE revised IS FALSE AND (prediction_rgb = 'Fire' OR prediction_multiband = 'Fire')
+        """
+
+        totals_query = f"""
+            SELECT
+                (
+                    SELECT COUNT(*)
+                    FROM {MYSQL_FIRMS_TABLE}
+                    WHERE revised IS FALSE AND prediction = 'Fire'
+                ) AS total_unchecked_firms,
+                (
+                    SELECT COUNT(*)
+                    FROM {MYSQL_BATCH_TABLE}
+                    WHERE revised IS FALSE AND (prediction_rgb = 'Fire' OR prediction_multiband = 'Fire')
+                ) AS total_unchecked_batch
         """
 
         # 2. Decide which parts to include based on 'source'
@@ -90,6 +112,12 @@ class CloudSQLClient:
 
         async with self.pool.acquire() as conn:
             async with conn.cursor(aiomysql.DictCursor) as cursor:
+                await cursor.execute(totals_query)
+                totals = await cursor.fetchone() or {
+                    "total_unchecked_firms": 0,
+                    "total_unchecked_batch": 0,
+                }
+
                 await cursor.execute(
                     final_sql,
                     (start_date, 
@@ -98,7 +126,12 @@ class CloudSQLClient:
                      end_date, 
                      limit),
                 )
-                return await cursor.fetchall()
+                rows = await cursor.fetchall()
+
+                return {
+                    "fires": rows,
+                    **totals,
+                }
         
 
     @staticmethod

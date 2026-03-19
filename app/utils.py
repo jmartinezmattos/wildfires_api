@@ -160,9 +160,11 @@ def alerts_to_geojson(fires: list[dict]) -> dict:
         "features": features,
     }
 
-def process_unchecked_fires(fires: list[dict]) -> dict:
+def process_unchecked_fires(fires_payload: dict) -> dict:
     local_signed_url_cache = {}
     fires_result= []
+
+    fires = fires_payload.get("fires", [])
 
     for fire in fires:
         fire = fire.copy()
@@ -178,7 +180,11 @@ def process_unchecked_fires(fires: list[dict]) -> dict:
         fire.pop("gcs_image_path", None)
         fires_result.append(fire)   
     
-    return fires_result
+    return {
+        "fires": fires_result,
+        "total_unchecked_firms": fires_payload.get("total_unchecked_firms", 0),
+        "total_unchecked_batch": fires_payload.get("total_unchecked_batch", 0),
+    }
     
 
 def add_signed_url_if_image(fire: dict) -> dict:
