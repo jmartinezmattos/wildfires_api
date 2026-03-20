@@ -11,6 +11,7 @@ load_dotenv("config/.env")
 MYSQL_FIRMS_TABLE = os.getenv("MYSQL_FIRMS_TABLE")
 MYSQL_METRICS_TABLE = os.getenv("MYSQL_METRICS_TABLE")
 MYSQL_BATCH_TABLE = os.getenv("MYSQL_BATCH_TABLE")
+MYSQL_WMS_DATETIME_TABLE = os.getenv("MYSQL_WMS_DATETIME_TABLE")
 
 DB_CONFIG = {
     "user": os.getenv("MYSQL_USER"),
@@ -313,6 +314,34 @@ class CloudSQLClient:
                 row = await cursor.fetchone()
 
         return row
+
+    async def fetch_wms_datetimes(self):
+        product_to_key = {
+            "NDVI_GRANULES": "ndvi",
+            "LST_GRANULES": "lst",
+            "TRUE_COLOR": "true_color",
+        }
+        grouped_datetimes = {"lst": [], "ndvi": [], "true_color": []}
+
+        async with self.pool.acquire() as conn:
+            async with conn.cursor(aiomysql.DictCursor) as cursor:
+                sql = f"""
+                    SELECT product, datetime
+                    FROM {MYSQL_WMS_DATETIME_TABLE}
+                    WHERE product IN ('NDVI_GRANULES', 'LST_GRANULES', 'TRUE_COLOR')
+                    ORDER BY datetime DESC
+                """
+                await cursor.execute(sql)
+                rows = await cursor.fetchall()
+
+        for row in rows:
+            key = product_to_key.get(row.get("product"))
+            value = row.get("datetime")
+
+            if key and value:
+                grouped_datetimes[key].append(value)
+
+        return grouped_datetimes
 
 
     

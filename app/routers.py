@@ -102,3 +102,11 @@ async def get_firefighters():
     data = get_cached_firefighters_geojson()
 
     return data
+
+@router.get("/wms_datetimes")
+async def get_wms_datetimes():
+    res = await db_client.fetch_wms_datetimes()
+    print(f"Datetimes for LST: {len(res['lst'])}")
+    print(f"Datetimes for NDVI: {len(res['ndvi'])}")
+    print(f"Datetimes for TRUE_COLOR: {len(res['true_color'])}")
+    return res
