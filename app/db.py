@@ -76,7 +76,7 @@ class CloudSQLClient:
                 'batch' AS source,
                 timestamp_utc AS timestamp
             FROM {MYSQL_BATCH_TABLE}
-            WHERE revised IS FALSE AN prediction_multiband = 'Fire'
+            WHERE revised IS FALSE AND prediction_multiband = 'Fire'
         """
 
         totals_query = f"""
